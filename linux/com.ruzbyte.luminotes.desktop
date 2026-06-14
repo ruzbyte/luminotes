@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Luminotes
+Comment=Take notes on an infinite canvas
+Exec=luminotes
+Icon=com.ruzbyte.luminotes
+Terminal=false
+Categories=Office;
