@@ -1,0 +1,14 @@
+name: luminotes_sync_core
+description: Shared sync primitives (manifest, hashing, 3-way diff) for the Luminotes app and server.
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ^3.12.2
+
+dependencies:
+  crypto: ^3.0.6
+  path: ^1.9.0
+
+dev_dependencies:
+  test: ^1.25.0

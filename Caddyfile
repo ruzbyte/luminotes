@@ -1,0 +1,8 @@
+{
+	email {$ACME_EMAIL}
+}
+
+# Automatic HTTPS for your domain; proxies to the sync server.
+{$DOMAIN} {
+	reverse_proxy server:8080
+}

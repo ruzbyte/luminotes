@@ -1,0 +1,45 @@
+# Luminotes sync server behind an existing Traefik reverse proxy.
+#
+# Use this instead of docker-compose.yml when you already run Traefik on the
+# host (owning 80/443) — e.g. with an ACME DNS-challenge cert resolver. Traefik
+# terminates TLS and routes to the container; no ports are published directly.
+#
+#   # .env must define JWT_SECRET (openssl rand -hex 32) and LUMINOTES_DOMAIN
+#   docker compose -f docker-compose.traefik.yml up -d --build
+#   docker compose -f docker-compose.traefik.yml exec luminotes \
+#     luminotes-server user add <name>
+#
+# Assumes an external Docker network named "proxy" shared with Traefik, and a
+# cert resolver named "myresolver". Adjust the resolver/entrypoint to match your
+# Traefik static config.
+
+services:
+  luminotes:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    image: luminotes-server:latest
+    container_name: luminotes
+    restart: unless-stopped
+    environment:
+      - JWT_SECRET=${JWT_SECRET:?set JWT_SECRET in .env}
+      - DATA_DIR=/data
+    volumes:
+      - luminotes-data:/data
+    networks:
+      - proxy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=proxy"
+      - "traefik.http.routers.luminotes.rule=Host(`${LUMINOTES_DOMAIN:?set LUMINOTES_DOMAIN in .env}`)"
+      - "traefik.http.routers.luminotes.entrypoints=websecure"
+      - "traefik.http.routers.luminotes.tls.certresolver=myresolver"
+      - "traefik.http.services.luminotes.loadbalancer.server.port=8080"
+
+networks:
+  proxy:
+    external: true
+
+volumes:
+  luminotes-data:
+    external: true

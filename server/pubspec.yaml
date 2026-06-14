@@ -1,0 +1,19 @@
+name: luminotes_server
+description: Self-hostable sync server for Luminotes.
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ^3.12.2
+
+dependencies:
+  shelf: ^1.4.1
+  shelf_router: ^1.1.4
+  dart_jsonwebtoken: ^2.14.0
+  crypto: ^3.0.6
+  path: ^1.9.0
+  luminotes_sync_core:
+    path: ../packages/luminotes_sync_core
+
+dev_dependencies:
+  lints: ^4.0.0

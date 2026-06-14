@@ -1,0 +1,10 @@
+# Only packages/ and server/ are needed to build the server image.
+*
+!server
+!packages
+
+# Drop transient artifacts even within the included dirs.
+**/.dart_tool
+**/build
+**/.packages
+**/pubspec.lock
