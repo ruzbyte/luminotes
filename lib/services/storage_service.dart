@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
@@ -20,6 +21,17 @@ class StorageService {
   StorageService._(this._root);
 
   final Directory _root;
+
+  /// Absolute path to the synced tree root (the `luminotes/` directory).
+  String get rootPath => _root.path;
+
+  /// Fires after every successful write so the sync layer can schedule a push.
+  /// Broadcast so multiple listeners (or none) are fine.
+  final StreamController<void> _changes = StreamController<void>.broadcast();
+  Stream<void> get onChanged => _changes.stream;
+  void _notifyChanged() {
+    if (!_changes.isClosed) _changes.add(null);
+  }
 
   static Future<StorageService> create() async {
     final docs = await getApplicationDocumentsDirectory();
@@ -49,6 +61,7 @@ class StorageService {
 
   Future<void> saveSettings(Map<String, dynamic> settings) async {
     await File(_settingsPath).writeAsString(jsonEncode(settings));
+    _notifyChanged();
   }
 
   String get _notesPath => '${_root.path}/notes';
@@ -93,6 +106,7 @@ class StorageService {
       'notes': [for (final n in notes) n.toJson()],
     };
     await File(_libraryPath).writeAsString(jsonEncode(json));
+    _notifyChanged();
   }
 
   // --- Notes ---------------------------------------------------------------
@@ -111,6 +125,7 @@ class StorageService {
   Future<void> saveNote(Note note) async {
     await Directory(_noteDir(note.id)).create(recursive: true);
     await File(_notePath(note.id)).writeAsString(jsonEncode(note.toJson()));
+    _notifyChanged();
   }
 
   Future<void> deleteNote(String id) async {
@@ -118,6 +133,7 @@ class StorageService {
     if (await dir.exists()) {
       await dir.delete(recursive: true);
     }
+    _notifyChanged();
   }
 
   /// Writes [bytes] into the note's assets directory.
@@ -129,6 +145,7 @@ class StorageService {
     final dir = Directory(assetsDirPath(noteId));
     await dir.create(recursive: true);
     await File('${dir.path}/$fileName').writeAsBytes(bytes);
+    _notifyChanged();
   }
 
   /// Copies an external file into the note's assets without loading it fully
@@ -141,5 +158,58 @@ class StorageService {
     final dir = Directory(assetsDirPath(noteId));
     await dir.create(recursive: true);
     await File(sourcePath).copy('${dir.path}/$fileName');
+    _notifyChanged();
+  }
+
+  // --- Generic tree access (used by the sync engine) -----------------------
+
+  /// Reads bytes at a POSIX [rel]ative path under the root, or null if missing.
+  Future<Uint8List?> readBytes(String rel) async {
+    final file = File('${_root.path}/$rel');
+    if (!await file.exists()) return null;
+    return file.readAsBytes();
+  }
+
+  /// Writes [bytes] at a POSIX [rel]ative path under the root, creating dirs.
+  Future<void> writeBytes(String rel, Uint8List bytes) async {
+    final file = File('${_root.path}/$rel');
+    await file.parent.create(recursive: true);
+    await file.writeAsBytes(bytes);
+    _notifyChanged();
+  }
+
+  /// Deletes the file at [rel] and prunes now-empty parent dirs up to the root.
+  Future<void> deleteRelative(String rel) async {
+    final file = File('${_root.path}/$rel');
+    if (await file.exists()) await file.delete();
+    var dir = file.parent;
+    while (dir.path.length > _root.path.length && await dir.exists()) {
+      if (await dir.list().isEmpty) {
+        await dir.delete();
+        dir = dir.parent;
+      } else {
+        break;
+      }
+    }
+    _notifyChanged();
+  }
+
+  // --- Sync state ----------------------------------------------------------
+  // Stored as a sibling of the synced tree so it never becomes sync content.
+
+  String get _syncStatePath => '${_root.parent.path}/luminotes_sync.json';
+
+  Future<Map<String, dynamic>> loadSyncState() async {
+    final file = File(_syncStatePath);
+    if (!await file.exists()) return {};
+    try {
+      return jsonDecode(await file.readAsString()) as Map<String, dynamic>;
+    } catch (_) {
+      return {};
+    }
+  }
+
+  Future<void> saveSyncState(Map<String, dynamic> state) async {
+    await File(_syncStatePath).writeAsString(jsonEncode(state));
   }
 }
