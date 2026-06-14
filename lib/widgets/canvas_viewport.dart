@@ -4,6 +4,13 @@ import 'package:flutter/material.dart';
 import '../models/canvas_page.dart';
 import 'canvas_page_view.dart';
 
+/// Lets the editor command the viewport (e.g. jump to a page) without a
+/// GlobalKey to the private state.
+class CanvasViewportController {
+  void Function(int index)? _jump;
+  void jumpToPage(int index) => _jump?.call(index);
+}
+
 /// Scrollable / zoomable viewport hosting the column of canvas pages.
 ///
 /// Zoom is applied by resizing the pages (crisp vector rendering), not by a
@@ -18,10 +25,18 @@ class CanvasViewport extends StatefulWidget {
     super.key,
     required this.pages,
     this.onPageChanged,
+    this.controller,
+    this.allowTouchPanZoom = true,
   });
 
   final List<CanvasPage> pages;
   final ValueChanged<int>? onPageChanged;
+  final CanvasViewportController? controller;
+
+  /// When false (select / text tools), touch pan & pinch-zoom are disabled so
+  /// taps and drags reach the text/image overlays instead of being captured by
+  /// the canvas pan/zoom gesture. Mouse wheel and the zoom buttons still work.
+  final bool allowTouchPanZoom;
 
   @override
   State<CanvasViewport> createState() => _CanvasViewportState();
@@ -42,6 +57,46 @@ class _CanvasViewportState extends State<CanvasViewport> {
   Offset _startFocal = Offset.zero;
 
   int _reportedPage = -1;
+  Size _viewport = Size.zero; // last laid-out viewport size
+
+  @override
+  void initState() {
+    super.initState();
+    widget.controller?._jump = _jumpToPage;
+  }
+
+  @override
+  void didUpdateWidget(CanvasViewport old) {
+    super.didUpdateWidget(old);
+    if (old.controller != widget.controller) {
+      old.controller?._jump = null;
+      widget.controller?._jump = _jumpToPage;
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.controller?._jump = null;
+    super.dispose();
+  }
+
+  /// Scrolls so page [index] starts at the top of the viewport.
+  void _jumpToPage(int index) {
+    if (_viewport == Size.zero || widget.pages.isEmpty) return;
+    final i = index.clamp(0, widget.pages.length - 1);
+    final pageWidth = _baseWidth(_viewport.width) * _zoom;
+    final pad = _basePad * _zoom;
+    final gap = _baseGap * _zoom;
+    var y = pad;
+    for (var p = 0; p < i; p++) {
+      y += pageWidth * (widget.pages[p].height / widget.pages[p].width) + gap;
+    }
+    setState(() {
+      _offset = Offset(_offset.dx, y - pad); // small top margin
+      _clampOffset(_viewport, _zoom);
+    });
+    _maybeReportPage(_viewport);
+  }
 
   /// Base (zoom-1) content size for the current viewport width.
   double _baseWidth(double viewportWidth) =>
@@ -143,6 +198,7 @@ class _CanvasViewportState extends State<CanvasViewport> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final viewport = Size(constraints.maxWidth, constraints.maxHeight);
+        _viewport = viewport; // cache for controller-driven jumps
         final pageWidth = _baseWidth(viewport.width) * _zoom;
         final pad = _basePad * _zoom;
         final gap = _baseGap * _zoom;
@@ -158,6 +214,39 @@ class _CanvasViewportState extends State<CanvasViewport> {
             ? (viewport.height - contentH) / 2
             : -_offset.dy;
 
+        // Viewport culling: only build pages whose vertical band is near the
+        // visible window (one screen of margin each way). Off-screen pages are
+        // cheap fixed-size placeholders, so a 600-page PDF stays light.
+        final scrollY = contentH <= viewport.height ? 0.0 : _offset.dy;
+        final winTop = scrollY - viewport.height;
+        final winBottom = scrollY + viewport.height * 2;
+
+        final children = <Widget>[];
+        var y = pad;
+        for (var i = 0; i < widget.pages.length; i++) {
+          final page = widget.pages[i];
+          final ph = pageWidth * (page.height / page.width);
+          final visible = (y + ph) >= winTop && y <= winBottom;
+          children.add(
+            visible
+                // Keyed so pages staying on screen across scroll rebuilds keep
+                // their element (and rendered PDF), instead of re-rendering.
+                ? CanvasPageView(
+                    key: ValueKey(page.id),
+                    pageIndex: i,
+                    page: page,
+                    displayWidth: pageWidth,
+                  )
+                : SizedBox(
+                    key: ValueKey('ph_${page.id}'),
+                    width: pageWidth,
+                    height: ph,
+                  ),
+          );
+          if (i != widget.pages.length - 1) children.add(SizedBox(height: gap));
+          y += ph + gap;
+        }
+
         // OverflowBox lets the (taller-than-viewport) column take its intrinsic
         // height without a RenderFlex overflow; the outer ClipRect clips it.
         final content = OverflowBox(
@@ -170,16 +259,7 @@ class _CanvasViewportState extends State<CanvasViewport> {
             padding: EdgeInsets.all(pad),
             child: Column(
               mainAxisSize: MainAxisSize.min,
-              children: [
-                for (var i = 0; i < widget.pages.length; i++) ...[
-                  CanvasPageView(
-                    pageIndex: i,
-                    page: widget.pages[i],
-                    displayWidth: pageWidth,
-                  ),
-                  if (i != widget.pages.length - 1) SizedBox(height: gap),
-                ],
-              ],
+              children: children,
             ),
           ),
         );
@@ -189,22 +269,23 @@ class _CanvasViewportState extends State<CanvasViewport> {
           child: RawGestureDetector(
             behavior: HitTestBehavior.opaque,
             gestures: {
-              ScaleGestureRecognizer:
-                  GestureRecognizerFactoryWithHandlers<ScaleGestureRecognizer>(
-                () => ScaleGestureRecognizer(
-                  // Pen & mouse are reserved for drawing; only fingers and the
-                  // trackpad pan/zoom the canvas.
-                  supportedDevices: const {
-                    PointerDeviceKind.touch,
-                    PointerDeviceKind.trackpad,
+              if (widget.allowTouchPanZoom)
+                ScaleGestureRecognizer:
+                    GestureRecognizerFactoryWithHandlers<ScaleGestureRecognizer>(
+                  () => ScaleGestureRecognizer(
+                    // Pen & mouse are reserved for drawing; only fingers and the
+                    // trackpad pan/zoom the canvas.
+                    supportedDevices: const {
+                      PointerDeviceKind.touch,
+                      PointerDeviceKind.trackpad,
+                    },
+                  ),
+                  (instance) {
+                    instance
+                      ..onStart = _onScaleStart
+                      ..onUpdate = (d) => _onScaleUpdate(d, viewport);
                   },
                 ),
-                (instance) {
-                  instance
-                    ..onStart = _onScaleStart
-                    ..onUpdate = (d) => _onScaleUpdate(d, viewport);
-                },
-              ),
             },
             child: ClipRect(
               child: Stack(

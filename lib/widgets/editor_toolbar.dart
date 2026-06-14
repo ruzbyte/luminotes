@@ -20,8 +20,9 @@ class EditorToolbar extends StatelessWidget {
   Widget build(BuildContext context) {
     final provider = context.watch<NoteProvider>();
     final tool = provider.tool;
-    final showColors =
+    final showWidth =
         tool == EditorTool.pen || tool == EditorTool.highlighter;
+    final showColors = showWidth || tool == EditorTool.text;
     final activeColor = tool == EditorTool.highlighter
         ? provider.highlighterColor
         : provider.penColor;
@@ -57,6 +58,12 @@ class EditorToolbar extends StatelessWidget {
                     onTap: () => provider.setTool(EditorTool.eraser),
                   ),
                   _ToolButton(
+                    icon: Icons.title,
+                    label: 'Text',
+                    selected: tool == EditorTool.text,
+                    onTap: () => provider.setTool(EditorTool.text),
+                  ),
+                  _ToolButton(
                     icon: Icons.open_with,
                     label: 'Select',
                     selected: tool == EditorTool.select,
@@ -68,8 +75,19 @@ class EditorToolbar extends StatelessWidget {
                     selected: tool == EditorTool.pan,
                     onTap: () => provider.setTool(EditorTool.pan),
                   ),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    tooltip: 'Undo',
+                    icon: const Icon(Icons.undo),
+                    onPressed: provider.canUndo ? provider.undo : null,
+                  ),
+                  IconButton(
+                    tooltip: 'Redo',
+                    icon: const Icon(Icons.redo),
+                    onPressed: provider.canRedo ? provider.redo : null,
+                  ),
                   const Spacer(),
-                  if (showColors)
+                  if (showWidth)
                     SizedBox(
                       width: 160,
                       child: Slider(

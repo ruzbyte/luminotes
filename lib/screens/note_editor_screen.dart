@@ -21,6 +21,8 @@ class NoteEditorScreen extends StatefulWidget {
 }
 
 class _NoteEditorScreenState extends State<NoteEditorScreen> {
+  final CanvasViewportController _viewportController =
+      CanvasViewportController();
   int _currentPage = 0;
   bool _busy = false;
   NoteProvider? _provider;
@@ -50,8 +52,10 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
     final provider = context.watch<NoteProvider>();
     final note = provider.note;
 
+    final dark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
-      backgroundColor: const Color(0xFFE8E8EC),
+      backgroundColor:
+          dark ? const Color(0xFF1F1F23) : const Color(0xFFE8E8EC),
       appBar: AppBar(
         title: note == null
             ? const Text('Loading…')
@@ -60,9 +64,9 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
             ? null
             : [
                 Center(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    child: Text('${_currentPage + 1}/${note.pages.length}'),
+                  child: TextButton(
+                    onPressed: () => _jumpToPage(note.pages.length),
+                    child: Text('${_currentPage + 1} / ${note.pages.length}'),
                   ),
                 ),
                 IconButton(
@@ -114,6 +118,11 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
               children: [
                 CanvasViewport(
                   pages: note.pages,
+                  controller: _viewportController,
+                  // In select/text tools, disable touch pan/zoom so taps & drags
+                  // reach the text/image overlays.
+                  allowTouchPanZoom: provider.tool != EditorTool.select &&
+                      provider.tool != EditorTool.text,
                   onPageChanged: (i) {
                     if (i != _currentPage) setState(() => _currentPage = i);
                   },
@@ -129,6 +138,33 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
             ),
       bottomNavigationBar: note == null ? null : const EditorToolbar(),
     );
+  }
+
+  Future<void> _jumpToPage(int pageCount) async {
+    final controller = TextEditingController(text: '${_currentPage + 1}');
+    final target = await showDialog<int>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Go to page'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          keyboardType: TextInputType.number,
+          decoration: InputDecoration(labelText: 'Page (1–$pageCount)'),
+          onSubmitted: (v) => Navigator.pop(ctx, int.tryParse(v)),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, int.tryParse(controller.text)),
+            child: const Text('Go'),
+          ),
+        ],
+      ),
+    );
+    if (target == null) return;
+    _viewportController.jumpToPage(target.clamp(1, pageCount) - 1);
   }
 
   void _onPageMenu(String value, NoteProvider provider) {

@@ -1,4 +1,5 @@
 import 'note_image.dart';
+import 'note_text.dart';
 import 'stroke.dart';
 
 /// Logical A4 page size in pixels (210x297mm at ~96dpi). Strokes and images
@@ -28,10 +29,14 @@ class CanvasPage {
     this.height = kA4LogicalHeight,
     List<Stroke>? strokes,
     List<NoteImage>? images,
+    List<NoteText>? texts,
     this.backgroundAsset,
+    this.pdfAsset,
+    this.pdfPage,
     this.background = PageBackground.grid,
   })  : strokes = strokes ?? [],
-        images = images ?? [];
+        images = images ?? [],
+        texts = texts ?? [];
 
   final String id;
 
@@ -41,9 +46,18 @@ class CanvasPage {
 
   final List<Stroke> strokes;
   final List<NoteImage> images;
+  final List<NoteText> texts;
 
-  /// Optional rasterized PDF page background (file name in `assets/`).
+  /// Legacy: pre-rasterized PDF page background (PNG file name in `assets/`).
+  /// New imports use [pdfAsset]/[pdfPage] and render on demand instead.
   String? backgroundAsset;
+
+  /// On-demand PDF background: the copied PDF file name in `assets/` and the
+  /// 1-based page number to render. Rendered lazily at display resolution.
+  String? pdfAsset;
+  int? pdfPage;
+
+  bool get hasPdfBackground => backgroundAsset != null || pdfAsset != null;
 
   /// Paper template (grid / lines / dots / blank). Ignored when a PDF
   /// background is present.
@@ -57,7 +71,10 @@ class CanvasPage {
         'h': height,
         'strokes': [for (final s in strokes) s.toJson()],
         'images': [for (final i in images) i.toJson()],
+        'texts': [for (final t in texts) t.toJson()],
         'bg': backgroundAsset,
+        'pdf': pdfAsset,
+        'pdfPage': pdfPage,
         'paper': background.name,
       };
 
@@ -73,7 +90,13 @@ class CanvasPage {
           for (final i in (json['images'] as List? ?? []))
             NoteImage.fromJson(i as Map<String, dynamic>),
         ],
+        texts: [
+          for (final t in (json['texts'] as List? ?? []))
+            NoteText.fromJson(t as Map<String, dynamic>),
+        ],
         backgroundAsset: json['bg'] as String?,
+        pdfAsset: json['pdf'] as String?,
+        pdfPage: json['pdfPage'] as int?,
         background: _backgroundFromName(json['paper'] as String?),
       );
 }

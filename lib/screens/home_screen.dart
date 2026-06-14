@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../models/folder.dart';
 import '../models/note.dart';
 import '../providers/library_provider.dart';
+import '../providers/settings_provider.dart';
 import 'note_editor_screen.dart';
 
 /// Browses folders and notes. Tapping a folder descends into it; tapping a
@@ -49,6 +50,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       : null,
                 ),
               ),
+        actions: const [_ThemeToggle()],
       ),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -427,6 +429,22 @@ class _CreateFab extends StatelessWidget {
           label: const Text('New note'),
         ),
       ],
+    );
+  }
+}
+
+class _ThemeToggle extends StatelessWidget {
+  const _ThemeToggle();
+
+  @override
+  Widget build(BuildContext context) {
+    final settings = context.watch<SettingsProvider>();
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    return IconButton(
+      tooltip: dark ? 'Switch to light mode' : 'Switch to dark mode',
+      icon: Icon(dark ? Icons.light_mode_outlined : Icons.dark_mode_outlined),
+      onPressed: () =>
+          settings.toggle(MediaQuery.platformBrightnessOf(context)),
     );
   }
 }

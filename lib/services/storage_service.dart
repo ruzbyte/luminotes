@@ -33,6 +33,24 @@ class StorageService {
   }
 
   String get _libraryPath => '${_root.path}/library.json';
+  String get _settingsPath => '${_root.path}/settings.json';
+
+  // --- Settings ------------------------------------------------------------
+
+  Future<Map<String, dynamic>> loadSettings() async {
+    final file = File(_settingsPath);
+    if (!await file.exists()) return {};
+    try {
+      return jsonDecode(await file.readAsString()) as Map<String, dynamic>;
+    } catch (_) {
+      return {};
+    }
+  }
+
+  Future<void> saveSettings(Map<String, dynamic> settings) async {
+    await File(_settingsPath).writeAsString(jsonEncode(settings));
+  }
+
   String get _notesPath => '${_root.path}/notes';
   String _noteDir(String id) => '$_notesPath/$id';
   String _notePath(String id) => '${_noteDir(id)}/note.json';
@@ -102,7 +120,7 @@ class StorageService {
     }
   }
 
-  /// Writes [bytes] into the note's assets directory and returns the file name.
+  /// Writes [bytes] into the note's assets directory.
   Future<void> saveAsset(
     String noteId,
     String fileName,
@@ -111,5 +129,17 @@ class StorageService {
     final dir = Directory(assetsDirPath(noteId));
     await dir.create(recursive: true);
     await File('${dir.path}/$fileName').writeAsBytes(bytes);
+  }
+
+  /// Copies an external file into the note's assets without loading it fully
+  /// into memory (used for large PDFs).
+  Future<void> copyAsset(
+    String noteId,
+    String fileName,
+    String sourcePath,
+  ) async {
+    final dir = Directory(assetsDirPath(noteId));
+    await dir.create(recursive: true);
+    await File(sourcePath).copy('${dir.path}/$fileName');
   }
 }
