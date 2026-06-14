@@ -1,4 +1,4 @@
-package com.luminotes.luminotes
+package com.ruzbyte.luminotes
 
 import io.flutter.embedding.android.FlutterActivity
 
