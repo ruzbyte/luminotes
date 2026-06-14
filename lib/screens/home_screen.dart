@@ -5,7 +5,9 @@ import '../models/folder.dart';
 import '../models/note.dart';
 import '../providers/library_provider.dart';
 import '../providers/settings_provider.dart';
+import '../providers/sync_provider.dart';
 import 'note_editor_screen.dart';
+import 'sync_settings_screen.dart';
 
 /// Browses folders and notes. Tapping a folder descends into it; tapping a
 /// note opens the editor. New folders/notes are created via the FAB.
@@ -50,7 +52,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       : null,
                 ),
               ),
-        actions: const [_ThemeToggle()],
+        actions: const [_SyncButton(), _ThemeToggle()],
       ),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -429,6 +431,30 @@ class _CreateFab extends StatelessWidget {
           label: const Text('New note'),
         ),
       ],
+    );
+  }
+}
+
+class _SyncButton extends StatelessWidget {
+  const _SyncButton();
+
+  @override
+  Widget build(BuildContext context) {
+    final sync = context.watch<SyncProvider>();
+    final scheme = Theme.of(context).colorScheme;
+    final (icon, color, tip) = switch (sync.status) {
+      SyncStatus.syncing => (Icons.sync, scheme.primary, 'Syncing…'),
+      SyncStatus.idle => (Icons.cloud_done_outlined, scheme.primary, 'Synced'),
+      SyncStatus.error => (Icons.cloud_off, scheme.error, 'Sync error'),
+      SyncStatus.disconnected =>
+        (Icons.cloud_off_outlined, scheme.outline, 'Set up cloud sync'),
+    };
+    return IconButton(
+      tooltip: tip,
+      icon: Icon(icon, color: color),
+      onPressed: () => Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const SyncSettingsScreen()),
+      ),
     );
   }
 }

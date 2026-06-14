@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'providers/library_provider.dart';
 import 'providers/note_provider.dart';
 import 'providers/settings_provider.dart';
+import 'providers/sync_provider.dart';
 import 'screens/home_screen.dart';
 import 'services/storage_service.dart';
 
@@ -16,8 +17,14 @@ Future<void> main() async {
   final storage = await StorageService.create();
   final library = LibraryProvider(storage)..load();
   final settings = SettingsProvider(storage)..load();
+  final sync = SyncProvider(storage)..init();
 
-  runApp(LuminotesApp(storage: storage, library: library, settings: settings));
+  runApp(LuminotesApp(
+    storage: storage,
+    library: library,
+    settings: settings,
+    sync: sync,
+  ));
 }
 
 class LuminotesApp extends StatelessWidget {
@@ -26,11 +33,13 @@ class LuminotesApp extends StatelessWidget {
     required this.storage,
     required this.library,
     required this.settings,
+    required this.sync,
   });
 
   final StorageService storage;
   final LibraryProvider library;
   final SettingsProvider settings;
+  final SyncProvider sync;
 
   @override
   Widget build(BuildContext context) {
@@ -39,6 +48,7 @@ class LuminotesApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider.value(value: library),
         ChangeNotifierProvider.value(value: settings),
+        ChangeNotifierProvider.value(value: sync),
         ChangeNotifierProvider(
           create: (_) => NoteProvider(storage, library),
         ),

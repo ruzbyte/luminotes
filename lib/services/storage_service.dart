@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../models/folder.dart';
 import '../models/note.dart';
+import 'sync/sync_store.dart';
 
 /// On-disk layout (under the app documents directory):
 ///
@@ -17,12 +18,13 @@ import '../models/note.dart';
 ///     note.json             // full note: pages, strokes, images
 ///     assets/<file>         // embedded images & rasterized PDF backgrounds
 /// ```
-class StorageService {
+class StorageService implements SyncStore {
   StorageService._(this._root);
 
   final Directory _root;
 
   /// Absolute path to the synced tree root (the `luminotes/` directory).
+  @override
   String get rootPath => _root.path;
 
   /// Fires after every successful write so the sync layer can schedule a push.
@@ -164,6 +166,7 @@ class StorageService {
   // --- Generic tree access (used by the sync engine) -----------------------
 
   /// Reads bytes at a POSIX [rel]ative path under the root, or null if missing.
+  @override
   Future<Uint8List?> readBytes(String rel) async {
     final file = File('${_root.path}/$rel');
     if (!await file.exists()) return null;
@@ -171,6 +174,7 @@ class StorageService {
   }
 
   /// Writes [bytes] at a POSIX [rel]ative path under the root, creating dirs.
+  @override
   Future<void> writeBytes(String rel, Uint8List bytes) async {
     final file = File('${_root.path}/$rel');
     await file.parent.create(recursive: true);
@@ -179,6 +183,7 @@ class StorageService {
   }
 
   /// Deletes the file at [rel] and prunes now-empty parent dirs up to the root.
+  @override
   Future<void> deleteRelative(String rel) async {
     final file = File('${_root.path}/$rel');
     if (await file.exists()) await file.delete();
@@ -199,6 +204,7 @@ class StorageService {
 
   String get _syncStatePath => '${_root.parent.path}/luminotes_sync.json';
 
+  @override
   Future<Map<String, dynamic>> loadSyncState() async {
     final file = File(_syncStatePath);
     if (!await file.exists()) return {};
@@ -209,6 +215,7 @@ class StorageService {
     }
   }
 
+  @override
   Future<void> saveSyncState(Map<String, dynamic> state) async {
     await File(_syncStatePath).writeAsString(jsonEncode(state));
   }

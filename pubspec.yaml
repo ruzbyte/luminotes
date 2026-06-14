@@ -39,6 +39,9 @@ dependencies:
   file_picker: ^11.0.2
   pdfrx: ^2.4.4
   uuid: ^4.5.3
+  http: ^1.2.0
+  luminotes_sync_core:
+    path: packages/luminotes_sync_core
 
 dev_dependencies:
   flutter_test:
