@@ -17,7 +17,9 @@ Future<void> main() async {
   final storage = await StorageService.create();
   final library = LibraryProvider(storage)..load();
   final settings = SettingsProvider(storage)..load();
-  final sync = SyncProvider(storage)..init();
+  // Reload the library index after sync pulls remote changes so the UI updates
+  // without restarting the app.
+  final sync = SyncProvider(storage, onRemoteChange: library.load)..init();
 
   runApp(LuminotesApp(
     storage: storage,

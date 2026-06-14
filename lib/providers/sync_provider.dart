@@ -15,9 +15,15 @@ enum SyncStatus { disconnected, idle, syncing, error }
 /// lives in the StorageService sync-state file, which sits outside the synced
 /// tree. A debounced push runs whenever local data changes.
 class SyncProvider extends ChangeNotifier {
-  SyncProvider(this._storage);
+  SyncProvider(this._storage, {Future<void> Function()? onRemoteChange}) {
+    _onRemoteChange = onRemoteChange;
+  }
 
   final StorageService _storage;
+
+  /// Called after a sync that changed local files (pulls/deletes/conflicts), so
+  /// in-memory providers (e.g. the library index) can reload from disk.
+  Future<void> Function()? _onRemoteChange;
 
   static const _debounce = Duration(seconds: 5);
 
@@ -125,12 +131,19 @@ class SyncProvider extends ChangeNotifier {
     _lastError = null;
     notifyListeners();
     try {
-      await service.sync();
+      final outcome = await service.sync();
       _lastSyncTime = DateTime.now();
       final state = await _storage.loadSyncState();
       state['lastSyncMs'] = _lastSyncTime!.millisecondsSinceEpoch;
       await _storage.saveSyncState(state);
       _status = SyncStatus.idle;
+      // If anything arrived from the server, refresh in-memory providers so the
+      // UI reflects it without an app restart.
+      if (outcome.pulled > 0 ||
+          outcome.deletedLocal > 0 ||
+          outcome.conflicts > 0) {
+        await _onRemoteChange?.call();
+      }
     } catch (e) {
       _lastError = '$e';
       _status = SyncStatus.error;
